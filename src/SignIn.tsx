@@ -4,7 +4,6 @@ import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import CssBaseline from '@mui/material/CssBaseline';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import Divider from '@mui/material/Divider';
 import FormLabel from '@mui/material/FormLabel';
 import FormControl from '@mui/material/FormControl';
 import Link from '@mui/material/Link';
@@ -16,6 +15,7 @@ import { styled } from '@mui/material/styles';
 import { SitemarkIcon } from './CustomIcons';
 import AppTheme from './theme/AppTheme';
 import ColorModeSelect from './theme/ColorModeSelect';
+import api from './api'
 
 const Card = styled(MuiCard)(({ theme }) => ({
   display: 'flex',
@@ -37,7 +37,7 @@ const Card = styled(MuiCard)(({ theme }) => ({
 }));
 
 const SignInContainer = styled(Stack)(({ theme }) => ({
-  minHeight: '100vh', // Устанавливаем минимальную высоту
+  minHeight: '100vh',
   padding: theme.spacing(2),
   [theme.breakpoints.up('sm')]: {
     padding: theme.spacing(4),
@@ -59,30 +59,48 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
 }));
 
 export default function SignIn(props: { disableCustomTheme?: boolean }) {
-  const [emailError, setEmailError] = React.useState(false);
+  const [emailHasError, setEmailHasError] = React.useState(false);
   const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
-  const [passwordError, setPasswordError] = React.useState(false);
+  const [passwordHasError, setPasswordHasError] = React.useState(false);
   const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
-  const [open, setOpen] = React.useState(false);
+  const [generalErrorMessage, setGeneralErrorMessage] = React.useState('');
 
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
-  const handleClose = () => {
-    setOpen(false);
-  };
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    if (emailError || passwordError) {
-      event.preventDefault();
+    if (!validateInputs()) {
       return;
     }
+
     const data = new FormData(event.currentTarget);
-    console.log({
+    const payload = {
       email: data.get('email'),
       password: data.get('password'),
-    });
+    };
+
+    try {
+      const response = await api.post('login', payload);
+      console.log('Успешный вход:', response.data);
+
+      // Логика после успешного входа, например, перенаправление пользователя
+    } catch (error) {
+      // if (api.isAxiosError(error) && error.response) {
+      //   const errorMessage = error.response.data.message || 'Ошибка при входе';
+      //
+      //   if (error.response.data.field === 'email') {
+      //     setEmailHasError(true);
+      //     setEmailErrorMessage(errorMessage);
+      //   } else if (error.response.data.field === 'password') {
+      //     setPasswordHasError(true);
+      //     setPasswordErrorMessage(errorMessage);
+      //   } else {
+      //     setGeneralErrorMessage(errorMessage);
+      //   }
+      // } else {
+      //   console.error('Ошибка:', error);
+      //   setGeneralErrorMessage('Произошла непредвиденная ошибка. Попробуйте еще раз.');
+      // }
+    }
   };
 
   const validateInputs = () => {
@@ -92,20 +110,20 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
     let isValid = true;
 
     if (!email.value || !/\S+@\S+\.\S+/.test(email.value)) {
-      setEmailError(true);
+      setEmailHasError(true);
       setEmailErrorMessage('Пожалуйста, введите действительный адрес электронной почты.');
       isValid = false;
     } else {
-      setEmailError(false);
+      setEmailHasError(false);
       setEmailErrorMessage('');
     }
 
     if (!password.value || password.value.length < 6) {
-      setPasswordError(true);
+      setPasswordHasError(true);
       setPasswordErrorMessage('Пароль должен содержать не менее 6 символов.');
       isValid = false;
     } else {
-      setPasswordError(false);
+      setPasswordHasError(false);
       setPasswordErrorMessage('');
     }
 
@@ -126,6 +144,11 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
           >
             Войти
           </Typography>
+          {generalErrorMessage && (
+            <Typography color="error" sx={{ mb: 2 }}>
+              {generalErrorMessage}
+            </Typography>
+          )}
           <Box
             component="form"
             onSubmit={handleSubmit}
@@ -140,7 +163,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
             <FormControl>
               <FormLabel htmlFor="email">Электронная почта</FormLabel>
               <TextField
-                error={emailError}
+                error={emailHasError}
                 helperText={emailErrorMessage}
                 id="email"
                 type="email"
@@ -151,7 +174,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 required
                 fullWidth
                 variant="outlined"
-                color={emailError ? 'error' : 'primary'}
+                color={emailHasError ? 'error' : 'primary'}
                 sx={{ ariaLabel: 'email' }}
               />
             </FormControl>
@@ -161,7 +184,6 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 <Link
                   component="button"
                   type="button"
-                  onClick={handleClickOpen}
                   variant="body2"
                   sx={{ alignSelf: 'baseline' }}
                 >
@@ -169,18 +191,17 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 </Link>
               </Box>
               <TextField
-                error={passwordError}
+                error={passwordHasError}
                 helperText={passwordErrorMessage}
                 name="password"
                 placeholder="••••••"
                 type="password"
                 id="password"
                 autoComplete="current-password"
-                autoFocus
                 required
                 fullWidth
                 variant="outlined"
-                color={passwordError ? 'error' : 'primary'}
+                color={passwordHasError ? 'error' : 'primary'}
               />
             </FormControl>
             <FormControlLabel
@@ -192,7 +213,6 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
               type="submit"
               fullWidth
               variant="contained"
-              onClick={validateInputs}
             >
               Войти
             </Button>
