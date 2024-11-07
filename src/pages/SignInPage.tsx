@@ -12,10 +12,11 @@ import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import MuiCard from '@mui/material/Card';
 import { styled } from '@mui/material/styles';
-import { SitemarkIcon } from './CustomIcons';
-import AppTheme from './theme/AppTheme';
-import ColorModeSelect from './theme/ColorModeSelect';
-import api from './api'
+import { SitemarkIcon } from '../CustomIcons';
+import AppTheme from '../theme/AppTheme';
+import ColorModeSelect from '../theme/ColorModeSelect';
+import api from '../api'
+import axios, { AxiosError } from 'axios';
 
 const Card = styled(MuiCard)(({ theme }) => ({
   display: 'flex',
@@ -58,7 +59,7 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
   },
 }));
 
-export default function SignIn(props: { disableCustomTheme?: boolean }) {
+export default function SignInPage(props: { disableCustomTheme?: boolean }) {
   const [emailHasError, setEmailHasError] = React.useState(false);
   const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
   const [passwordHasError, setPasswordHasError] = React.useState(false);
@@ -84,22 +85,22 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
 
       // Логика после успешного входа, например, перенаправление пользователя
     } catch (error) {
-      // if (api.isAxiosError(error) && error.response) {
-      //   const errorMessage = error.response.data.message || 'Ошибка при входе';
-      //
-      //   if (error.response.data.field === 'email') {
-      //     setEmailHasError(true);
-      //     setEmailErrorMessage(errorMessage);
-      //   } else if (error.response.data.field === 'password') {
-      //     setPasswordHasError(true);
-      //     setPasswordErrorMessage(errorMessage);
-      //   } else {
-      //     setGeneralErrorMessage(errorMessage);
-      //   }
-      // } else {
-      //   console.error('Ошибка:', error);
-      //   setGeneralErrorMessage('Произошла непредвиденная ошибка. Попробуйте еще раз.');
-      // }
+       if (axios.isAxiosError(error) && error.response) {
+         const errorMessage = error.response.data.message || 'Ошибка при входе';
+      
+         if (error.response.data.field === 'email') {
+           setEmailHasError(true);
+           setEmailErrorMessage(errorMessage);
+         } else if (error.response.data.field === 'password') {
+           setPasswordHasError(true);
+           setPasswordErrorMessage(errorMessage);
+         } else {
+           setGeneralErrorMessage(errorMessage);
+         }
+       } else {
+         console.error('Ошибка:', error);
+         setGeneralErrorMessage('Произошла непредвиденная ошибка. Попробуйте еще раз.');
+       }
     }
   };
 
