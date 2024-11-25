@@ -13,7 +13,8 @@ import MuiCard from '@mui/material/Card';
 import { styled } from '@mui/material/styles';
 import { SitemarkIcon } from '../CustomIcons';
 import ColorModeSelect from '../theme/ColorModeSelect';
-import axios from '../api';
+import api from '../api';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const Card = styled(MuiCard)(({ theme }) => ({
@@ -74,7 +75,7 @@ export default function SignInPage() {
     }
 
     // Перенаправление на другую страницу
-    navigate('/dashboard');
+    navigate('/main');
 
     const data = new FormData(event.currentTarget);
     const payload = {
