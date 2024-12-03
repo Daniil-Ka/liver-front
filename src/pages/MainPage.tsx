@@ -2,6 +2,31 @@ import React, { useRef, useState } from "react";
 import { Button, Box, Alert } from "@mui/material";
 import axios from "../api";
 import DragAndDropFileUpload from "../components/DragAndDropFileUpload";
+import {styled} from "@mui/material/styles";
+import Stack from "@mui/material/Stack";
+import ColorModeSelect from '../theme/ColorModeSelect';
+
+const Container = styled(Stack)(({ theme }) => ({
+  minHeight: '100vh',
+  padding: theme.spacing(2),
+  [theme.breakpoints.up('sm')]: {
+    padding: theme.spacing(4),
+  },
+  '&::before': {
+    content: '""',
+    display: 'block',
+    position: 'absolute',
+    zIndex: -1,
+    inset: 0,
+    backgroundImage:
+      'radial-gradient(ellipse at 50% 50%, hsl(210, 100%, 97%), hsl(0, 0%, 100%))',
+    backgroundRepeat: 'no-repeat',
+    ...theme.applyStyles('dark', {
+      backgroundImage:
+        'radial-gradient(at 50% 50%, hsla(210, 100%, 16%, 0.5), hsl(220, 30%, 5%))',
+    }),
+  },
+}));
 
 export default function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -116,7 +141,7 @@ export default function CameraCapture() {
   };
 
   return (
-    <Box
+    <Container
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -125,6 +150,7 @@ export default function CameraCapture() {
         mt: 4,
       }}
     >
+      <ColorModeSelect sx={{ position: 'fixed', top: '1rem', right: '1rem' }} />
       <DragAndDropFileUpload onFileUpload={handleFileUpload} />
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -156,6 +182,6 @@ export default function CameraCapture() {
       <Button variant="contained" onClick={uploadCapturedPhoto} disabled={!capturedImageUrl}>
         Отправить фото
       </Button>
-    </Box>
+    </Container>
   );
 }
