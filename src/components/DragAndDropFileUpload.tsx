@@ -1,4 +1,4 @@
-jimport React, { useCallback, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Box, Paper, Typography } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 
