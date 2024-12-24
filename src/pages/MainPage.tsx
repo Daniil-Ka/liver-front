@@ -87,18 +87,27 @@ const drawOnMask = (x: number, y: number) => {
 };
 
 const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-  if (!isDrawing || !allowDrawing || !maskCanvasRef.current) return;
+  if (!maskCanvasRef.current || !image || !isDrawing) return;
 
   const rectBounds = maskCanvasRef.current.getBoundingClientRect();
   const mouseX = Math.floor((e.clientX - rectBounds.left) * (image?.width ?? 1) / rectBounds.width);
   const mouseY = Math.floor((e.clientY - rectBounds.top) * (image?.height ?? 1) / rectBounds.height);
+  console.log(checkBrushTouchesMask(mouseX, mouseY))
 
-  if (lastPosition.current) {
-    const { x: lastX, y: lastY } = lastPosition.current;
-    interpolateLine(lastX, lastY, mouseX, mouseY);
+  if (true) {
+    if (checkBrushTouchesMask(mouseX, mouseY) && isDrawing)
+      setAllowDrawing(true);
   }
 
-  lastPosition.current = { x: mouseX, y: mouseY };
+  // Мы рисуем на маске, только если мышь находится на допустимой области
+  if (allowDrawing) {
+    if (lastPosition.current) {
+      const { x: lastX, y: lastY } = lastPosition.current;
+      interpolateLine(lastX, lastY, mouseX, mouseY);
+    }
+
+    lastPosition.current = { x: mouseX, y: mouseY };
+  }
 };
 
   const interpolateLine = (x0: number, y0: number, x1: number, y1: number) => {
@@ -114,51 +123,54 @@ const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
   };
 
     // Проверка на касание кисточки с закрашенной областью
-  const checkBrushTouchesMask = (x: number, y: number): boolean => {
-    for (let dy = -brushSize; dy <= brushSize; dy++) {
-      for (let dx = -brushSize; dx <= brushSize; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (
-          nx >= 0 &&
-          ny >= 0 &&
-          ny < mask.length &&
-          nx < mask[0].length &&
-          Math.sqrt(dx * dx + dy * dy) <= brushSize &&
-          mask[ny][nx] === 1
-        ) {
-          return true;
-        }
+// Проверка на касание кисточки с уже нарисованной областью
+// Проверка, касается ли кисточка уже нарисованной области
+const checkBrushTouchesMask = (x: number, y: number): boolean => {
+  for (let dy = -brushSize; dy <= brushSize; dy++) {
+    for (let dx = -brushSize; dx <= brushSize; dx++) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (
+        nx >= 0 &&
+        ny >= 0 &&
+        ny < mask.length &&
+        nx < mask[0].length &&
+        Math.sqrt(dx * dx + dy * dy) <= brushSize &&
+        mask[ny][nx] === 1
+      ) {
+        return true; // Есть касание с уже нарисованной областью
       }
     }
-    return false;
-  };
+  }
+  return false; // Нет касания с нарисованной областью
+};
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!maskCanvasRef.current || !image) return;
+const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  if (!maskCanvasRef.current || !image) return;
 
-    const rectBounds = maskCanvasRef.current.getBoundingClientRect();
-    const mouseX = Math.floor(e.clientX - rectBounds.left);
-    const mouseY = Math.floor(e.clientY - rectBounds.top);
+  const rectBounds = maskCanvasRef.current.getBoundingClientRect();
+  const mouseX = Math.floor(e.clientX - rectBounds.left);
+  const mouseY = Math.floor(e.clientY - rectBounds.top);
 
-    const canStartDrawing = mask.flat().every((val) => val === 0) || checkBrushTouchesMask(mouseX, mouseY);
+  // Проверка на возможность начать рисование
+  const canStartDrawing = mask.flat().every((val) => val === 0) || checkBrushTouchesMask(mouseX, mouseY);
 
-    if (canStartDrawing) {
-      setAllowDrawing(true);
-      setIsDrawing(true);
-      lastPosition.current = { x: mouseX, y: mouseY };
-      drawOnMask(mouseX, mouseY);
-    } else {
-      setAllowDrawing(false);
-    }
-  };
+  setIsDrawing(true); // Начинаем рисовать
+  if (canStartDrawing) {
+    setAllowDrawing(true); // Разрешаем рисование
+    lastPosition.current = { x: mouseX, y: mouseY };
+    drawOnMask(mouseX, mouseY);
+  } else {
+    setAllowDrawing(false); // Блокируем рисование, если оно не должно начаться
+  }
+};
 
-
-  const handleMouseUp = () => {
-    setIsDrawing(false);
-    lastPosition.current = null;
-    fillEnclosedAreas();  // Проверка и закрашивание пустот
-  };
+const handleMouseUp = () => {
+  setIsDrawing(false);
+  lastPosition.current = null;
+  fillEnclosedAreas();
+  setAllowDrawing(false);  // Блокируем рисование после отпускания кнопки
+};
 
   // Функция для заливки пустых областей
 const fillEnclosedAreas = () => {
