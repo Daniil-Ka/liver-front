@@ -1,13 +1,14 @@
 import axios from "../api";
+import Starfield from "../components/StarField";
 import DragAndDropFileUpload from "../components/DragAndDropFileUpload";
 import {styled} from "@mui/material/styles";
 import Stack from "@mui/material/Stack";
 import ColorModeSelect from '../theme/ColorModeSelect';
-import React, { useRef, useState, useEffect } from "react";
-import { Button, Box, Typography, Slider, Alert } from "@mui/material";
+import React, {useEffect, useRef, useState} from "react";
+import {Alert, Box, Button, Slider, Typography} from "@mui/material";
 
 const Container = styled(Stack)(({ theme }) => ({
-  minHeight: '100vh',
+  minHeight: '100%',
   padding: theme.spacing(2),
   [theme.breakpoints.up('sm')]: {
     padding: theme.spacing(4),
@@ -15,8 +16,8 @@ const Container = styled(Stack)(({ theme }) => ({
   '&::before': {
     content: '""',
     display: 'block',
-    position: 'absolute',
-    zIndex: -1,
+    position: 'fixed',
+    zIndex: -99,
     inset: 0,
     backgroundImage:
       'radial-gradient(ellipse at 50% 50%, hsl(210, 100%, 97%), hsl(0, 0%, 100%))',
@@ -30,6 +31,7 @@ const Container = styled(Stack)(({ theme }) => ({
 
 export default function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
   const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null);
@@ -49,23 +51,165 @@ export default function CameraCapture() {
   const lastPosition = useRef<{ x: number; y: number } | null>(null);
   const [allowDrawing, setAllowDrawing] = useState(true);
 
-
   // Запуск камеры
-  const startCamera = async () => {
-    setErrorMessage(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setIsCameraActive(true);
-      }
-    } catch (error) {
-      console.error("Ошибка при доступе к камере:", error);
-      setErrorMessage("Не удалось получить доступ к камере.");
-      setIsCameraActive(false);
+const startCamera = async () => {
+  setErrorMessage(null);
+
+  // Инициализация WebSocket
+  wsRef.current = new WebSocket("ws://127.0.0.1:8000/ws");
+
+  wsRef.current.onopen = () => {
+    console.log("WebSocket подключен.");
+  };
+
+  wsRef.current.onclose = () => {
+    console.log("WebSocket отключен.");
+  };
+
+  wsRef.current.onerror = (error) => {
+    console.error("Ошибка WebSocket:", error);
+  };
+
+  wsRef.current.onmessage = (event) => {
+    const data = event.data;
+    const canvas = canvasRef.current;
+
+    // Проверяем, что данные — это Blob
+    if (data instanceof Blob) {
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        const arrayBuffer = reader.result;
+        const byteArray = new Uint8Array(arrayBuffer);
+
+        // Создаём изображение из полученных данных
+        const image = new Image();
+        const blob = new Blob([byteArray], { type: 'image/png' });  // Убедитесь, что формат 'image/png' соответствует типу, который отправляется с сервера
+        image.src = URL.createObjectURL(blob);
+        setServerImageUrl(image.src); // Устанавливаем URL для отображения
+
+        image.onload = () => {
+          if (maskCanvasRef.current) {
+            const maskCanvas = maskCanvasRef.current;
+            const maskCtx = maskCanvas.getContext("2d");
+
+            // Устанавливаем размеры канваса для маски
+            maskCanvas.width = image.width;
+            maskCanvas.height = image.height;
+
+            setMask(initializeMask(image.width, image.height)); // Инициализируем маску для изображения
+
+            // Создаем новый ImageData для работы с пикселями
+            const tempCanvas = document.createElement("canvas");
+            const tempCtx = tempCanvas.getContext("2d");
+            tempCanvas.width = image.width;
+            tempCanvas.height = image.height;
+
+            // Отрисовываем изображение на временном канвасе для извлечения данных
+            tempCtx?.drawImage(image, 0, 0);
+
+            // Получаем данные пикселей с альфа-каналом
+            const imageData = tempCtx?.getImageData(0, 0, image.width, image.height);
+
+            if (imageData) {
+              const mask = [];
+
+              // Проходим по всем пикселям изображения и создаем маску
+              for (let y = 0; y < image.height; y++) {
+                let row = [];
+                for (let x = 0; x < image.width; x++) {
+                  // Индекс в массиве ImageData
+                  let index = (y * image.width + x) * 4;
+
+                  // Получаем значение alpha-канала
+                  let alpha = imageData.data[index + 3];
+
+                  // Заполняем mask 1, если alpha > 0 (непрозрачный), иначе 0
+                  row.push(alpha > 254 ? 1 : 0);
+                }
+                mask.push(row);
+              }
+
+              // Заполняем маску
+              setMask(mask);
+            }
+          }
+        };
+      };
+
+      reader.readAsArrayBuffer(data); // Читаем Blob как ArrayBuffer
+    } else {
+      console.error("Получены некорректные данные:", data);
     }
   };
+
+  // Доступ к камере
+  navigator.mediaDevices
+    .getUserMedia({ video: true })
+    .then((stream) => {
+      // Создаем элемент video для доступа к камере
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.play();
+
+      video.onloadedmetadata = () => {
+        // Получаем ссылки на canvas элементы
+        const canvas = canvasRef.current;
+        const maskCanvas = maskCanvasRef.current;
+
+        if (canvas && maskCanvas) {
+          const context = canvas.getContext("2d");
+          const maskContext = maskCanvas.getContext("2d");
+
+          // Устанавливаем размеры canvas
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          maskCanvas.width = video.videoWidth;
+          maskCanvas.height = video.videoHeight;
+
+          let lastSendTime = Date.now(); // Время последней отправки
+
+          const sendFrame = () => {
+            const currentTime = Date.now();
+
+            // Проверяем, прошло ли 500 мс с последней отправки
+            if (currentTime - lastSendTime >= 400) {
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                // Отправляем кадр через WebSocket
+                const frame = canvas.toDataURL("image/jpeg");
+                wsRef.current.send(frame); // Отправка кадра в формате Base64
+
+                lastSendTime = currentTime; // Обновляем время последней отправки
+              }
+            }
+          };
+
+          // Отображение видео на канвасе и отправка кадров с интервалом 500 мс
+          const updateCanvas = () => {
+            // Рисуем кадр с видео на основной канвас
+            context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Создаем маску (например, прозрачность)
+            //maskContext?.clearRect(0, 0, maskCanvas.width, maskCanvas.height); // Очищаем маску
+            //maskContext?.fillStyle = "rgba(0, 0, 0, 0.5)"; // Полупрозрачная маска
+            //maskContext?.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+            // Проверяем и отправляем кадр
+            sendFrame();
+
+            // Запуск следующего обновления
+            requestAnimationFrame(updateCanvas);
+          };
+
+          updateCanvas(); // Запуск обновления канваса
+        }
+      };
+    })
+    .catch((error) => {
+      console.error("Ошибка доступа к камере:", error);
+    });
+};
+
 
   // Сделать фото
   const capturePhoto = () => {
@@ -184,7 +328,14 @@ export default function CameraCapture() {
         canvas.width = image.width;
         canvas.height = image.height;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(image, 0, 0); // Рисуем изображение на канвасе
+        //ctx.drawImage(image, 0, 0)
+
+        ctx.drawImage(image, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < imageData.data.length; i += 4) {
+            imageData.data[i + 3] = 255;
+        }
+        ctx.putImageData(imageData, 0, 0);
       }
     }
   }, [image]);
@@ -193,11 +344,10 @@ export default function CameraCapture() {
   useEffect(() => {
     if (maskCanvasRef.current && image) {
       const canvas = maskCanvasRef.current;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const ctx = canvas.getContext("2d", { willReadFrequently: true, alpha: false });
       if (ctx) {
         canvas.width = image.width;
         canvas.height = image.height;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         for (let y = 0; y < mask.length; y++) {
@@ -296,7 +446,6 @@ export default function CameraCapture() {
 
   // Обработчик начала рисования
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    console.log(image)
     if (!maskCanvasRef.current || !image) return;
 
     const rectBounds = maskCanvasRef.current.getBoundingClientRect();
@@ -347,9 +496,11 @@ export default function CameraCapture() {
     };
 
     // Применяем заливку
-    for (let x = 0; x < mask[0].length; x++) {
-      if (!visited[0][x]) floodFillExternal(x, 0);
-      if (!visited[mask.length - 1][x]) floodFillExternal(x, mask.length - 1);
+    if (mask[0]?.length) {
+      for (let x = 0; x < mask[0].length; x++) {
+        if (!visited[0][x]) floodFillExternal(x, 0);
+        if (!visited[mask.length - 1][x]) floodFillExternal(x, mask.length - 1);
+      }
     }
 
     // Заполняем внутренние области
@@ -381,25 +532,61 @@ export default function CameraCapture() {
     setMask(newMask);
   };
 
-  // Функция для сохранения маски
-  const handleSave = () => {
-    console.log("Сохраненная маска:", mask);
-    alert("Маска сохранена. Проверьте консоль.");
-  };
-
     useEffect(() => {
-    if (serverImageUrl && canvasRef.current) {
+    if (serverImageUrl && canvasRef.current && maskCanvasRef.current) {
       const canvas = canvasRef.current;
+      const maskCanvas = maskCanvasRef.current;
       const ctx = canvas.getContext("2d");
-      const img = new Image();
-      img.src = serverImageUrl;
-      img.onload = () => {
+      const maskCtx = maskCanvas.getContext("2d");
+
+      const image = new Image();
+      image.src = serverImageUrl;
+      image.onload = () => {
+        canvas.width = image.width;
+        canvas.height = image.height;
+
+        setMask(initializeMask(image.width, image.height)); // Инициализируем маску для изображения
+
         if (ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height); // Очистить канвас перед отрисовкой
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height); // Рисуем изображение на канвасе
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height); // Рисуем изображение на канвасе
+
+          // Извлекаем альфа-канал как маску
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const maskData = new Uint8Array(imageData.data.length / 4);
+          for (let i = 0; i < imageData.data.length; i += 4) {
+            maskData[i / 4] = imageData.data[i + 3]; // A канал (маска)
+          }
+
+          // Создаем изображение маски
+          const maskCanvas = document.createElement("canvas");
+          maskCanvas.width = canvas.width;
+          maskCanvas.height = canvas.height;
+
+          if (maskCtx) {
+            // Массив mask, который будет хранить 0 или 1
+            let mask = [];
+
+            // Проходим по всем пикселям
+            for (let y = 0; y < maskCanvas.height; y++) {
+                let row = [];
+                for (let x = 0; x < maskCanvas.width; x++) {
+                    // Индекс в массиве ImageData
+                    let index = (y * maskCanvas.width + x) * 4;
+
+                    // Получаем значение alpha-канала
+                    let alpha = imageData.data[index + 3];
+
+                    // Заполняем mask 1, если alpha > 0 (непрозрачный), иначе 0
+                    row.push(alpha > 254 ? 1 : 0);
+                }
+                mask.push(row);
+            }
+
+            setImage(image); // Загружаем изображение
+            setMask(mask)
+          }
         }
-        setImage(img); // Загружаем изображение
-        setMask(initializeMask(img.width, img.height)); // Инициализируем маску для изображения
       };
 
     }
@@ -407,93 +594,101 @@ export default function CameraCapture() {
 
 
   return (
-    <Container
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 2,
-        mt: 4,
-      }}
-    >
-      <ColorModeSelect sx={{ position: 'fixed', top: '1rem', right: '1rem' }} />
-      <DragAndDropFileUpload onFileUpload={handleFileUpload} />
-      {errorMessage && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {errorMessage}
-        </Alert>
-      )}
-      <video ref={videoRef} style={{ maxWidth: "100%", border: "1px solid black" }} />
-      <canvas ref={canvasRef} style={{ display: "none" }} />
-      {capturedImageUrl && (
-        <img
-          src={capturedImageUrl}
-          alt="Captured"
-          style={{ maxWidth: "100%", marginTop: "10px", border: "1px solid black" }}
-        />
-      )}
-      {serverImageUrl && (
-        <img
-          src={serverImageUrl}
-          alt="Server Response"
-          style={{ maxWidth: "100%", marginTop: "10px", border: "1px solid green" }}
-        />
-      )}
-      <Button variant="contained" onClick={startCamera}>
-        Включить камеру
-      </Button>
-      <Button variant="contained" onClick={capturePhoto} disabled={!isCameraActive}>
-        Сделать фото
-      </Button>
-      <Button variant="contained" onClick={uploadCapturedPhoto} disabled={!capturedImageUrl}>
-        Отправить фото
-      </Button>
-
-
-          <Box sx={{ textAlign: "center", marginTop: "20px" }}>
-      <input type="file" accept="image/*" onChange={handleImageUpload} />
-      <Box sx={{ margin: "10px 0" }}>
-        <Typography>Размер кисти: {brushSize}</Typography>
-        <Slider
-          value={brushSize}
-          min={1}
-          max={50}
-          step={1}
-          onChange={(e, value) => setBrushSize(value as number)}
-        />
-      </Box>
-      <Box
-        sx={{
-          position: "relative",
-          display: "inline-block",
-          border: "1px solid black",
-        }}
-      >
-        <canvas ref={canvasRef} style={{ position: "absolute", top: 0, left: 0 }} />
-        <canvas
-          ref={maskCanvasRef}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            cursor: "crosshair",
+      <Container
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
+            mt: 4,
           }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        />
-      </Box>
-      <Button
-        variant="contained"
-        onClick={handleSave}
-        disabled={!image}
-        sx={{ marginTop: "10px" }}
       >
-        Сохранить маску
-      </Button>
-    </Box>
-    </Container>
+        <Starfield/>
+        <ColorModeSelect sx={{position: 'fixed', top: '1rem', right: '1rem'}}/>
+        <Box sx={{ height: '0.5rem' }} /> {/* Вертикальный отступ */}
+        <DragAndDropFileUpload onFileUpload={handleFileUpload}/>
+        {errorMessage && (
+            <Alert severity="error" sx={{mb: 2}}>
+              {errorMessage}
+            </Alert>
+        )}
+        <canvas ref={canvasRef} style={{display: "none"}}/>
+        {capturedImageUrl && (
+            <img
+                src={capturedImageUrl}
+                alt="Captured"
+                style={{maxWidth: "100%", marginTop: "10px", border: "1px solid black"}}
+            />
+        )}
+        {serverImageUrl && (
+            <img
+                src={serverImageUrl}
+                alt="Server Response"
+                style={{
+                  position: "absolute",
+                  display: "none",
+                  maxWidth: "100%",
+                  marginTop: "10px",
+                  border: "1px solid green"
+                }}
+            />
+        )}
 
+<Box
+  id="data_container"
+  sx={{
+    width: "100%",            // Использует всю доступную ширину
+    maxWidth: "640px",        // Ограничивает максимальную ширину
+    aspectRatio: "1 / 1",     // Делает контейнер квадратным (1:1)
+    padding: 0,
+    boxSizing: "border-box",  // Учитывает padding в расчете размеров
+    position: "relative",     // Для корректной работы абсолютного позиционирования canvas
+  }}
+>
+  <canvas ref={canvasRef} style={{ position: "absolute", width: "100%", height: "100%" }} />
+  <canvas
+    ref={maskCanvasRef}
+    style={{
+      position: "absolute",
+      cursor: "crosshair",
+      width: "100%",           // Чтобы канвас занимал весь размер родителя
+      height: "100%",
+    }}
+    onMouseDown={handleMouseDown}
+    onMouseMove={handleMouseMove}
+    onMouseUp={handleMouseUp}
+    onMouseLeave={handleMouseUp}
+  />
+</Box>
+
+
+        <video ref={videoRef} autoPlay playsInline style={{display:"none", maxWidth: "100%", border: "1px solid black"}}/>
+
+      <Stack direction="row" spacing={2}>
+        <Button variant="contained" onClick={startCamera}>
+          Включить камеру
+        </Button>
+        <Button variant="contained" onClick={capturePhoto} disabled={!isCameraActive}>
+          Сделать фото
+        </Button>
+        <Button variant="contained" onClick={uploadCapturedPhoto} disabled={!capturedImageUrl}>
+          Отправить фото
+        </Button>
+      </Stack>
+
+
+      <Box sx={{ textAlign: "center", padding: "20px", maxWidth: 600, width: '100%' }}>
+        <Stack direction="row" spacing={2} justifyContent="center" alignItems="center">
+          <Typography>Размер кисти: {brushSize}</Typography>
+          <Slider
+            value={brushSize}
+            min={1}
+            max={50}
+            step={1}
+            onChange={(e, value) => setBrushSize(value as number)}
+          />
+        </Stack>
+      </Box>
+      </Container>
   );
 }

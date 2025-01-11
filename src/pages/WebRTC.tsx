@@ -33,13 +33,15 @@ const VideoStream = () => {
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
         canvas.width = 640;
-        canvas.height = 480;
+        canvas.height = 640;
 
         const sendFrame = () => {
           if (wsRef && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
               if (!context)
                   return
-            context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+              if (videoRef.current)
+                    context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
             const frame = canvas.toDataURL("image/jpeg");
             wsRef.current.send(frame); // Отправка кадра в формате Base64
           }

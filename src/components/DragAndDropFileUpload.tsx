@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Box, Paper, Typography } from "@mui/material";
+import { Box, Paper, Typography, useTheme, useMediaQuery } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 
 interface DragAndDropFileUploadProps {
@@ -8,6 +8,8 @@ interface DragAndDropFileUploadProps {
 
 const DragAndDropFileUpload: React.FC<DragAndDropFileUploadProps> = ({ onFileUpload }) => {
   const [dragOver, setDragOver] = useState(false);
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === "dark"; // Определяем текущий режим
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -46,11 +48,15 @@ const DragAndDropFileUpload: React.FC<DragAndDropFileUploadProps> = ({ onFileUpl
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       sx={{
-        border: dragOver ? "2px dashed #0078d4" : "2px dashed #aaa",
+        border: dragOver
+          ? `2px dashed ${isDarkMode ? "#61dafb" : "#0078d4"}`
+          : `2px dashed ${isDarkMode ? "#444" : "#aaa"}`,
         padding: 4,
         textAlign: "center",
         cursor: "pointer",
-        background: dragOver ? "#f0f8ff" : "#fafafa",
+        background: dragOver
+          ? (isDarkMode ? "#333" : "#f0f8ff")
+          : (isDarkMode ? "#121212" : "#fafafa"),
         transition: "background 0.3s, border-color 0.3s",
         width: "100%",
         maxWidth: 600,
@@ -87,14 +93,18 @@ const DragAndDropFileUpload: React.FC<DragAndDropFileUploadProps> = ({ onFileUpl
         <CloudUploadIcon
           sx={{
             fontSize: 60,
-            color: dragOver ? "#0078d4" : "#aaa",
+            color: dragOver
+              ? (isDarkMode ? "#61dafb" : "#0078d4")
+              : (isDarkMode ? "#ccc" : "#aaa"),
             mb: 1,
           }}
         />
         <Typography
           variant="body1"
           sx={{
-            color: dragOver ? "#0078d4" : "#aaa",
+            color: dragOver
+              ? (isDarkMode ? "#61dafb" : "#0078d4")
+              : (isDarkMode ? "#ccc" : "#aaa"),
             fontWeight: "bold",
           }}
         >
