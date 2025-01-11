@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 // Создаем экземпляр axios с базовыми настройками
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL, // Замените на ваш базовый URL
+  baseURL: "http://80.87.104.152:8000/", // Замените на ваш базовый URL
   timeout: 10000, // Устанавливаем таймаут в миллисекундах (например, 10 секунд)
   headers: {
     'Content-Type': 'application/json',

@@ -12,7 +12,7 @@ export default function RouterApp(props: { disableCustomTheme?: boolean }) {
       <CssBaseline enableColorScheme />
         <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<SignInPage />} />
             <Route path="/main" element={<Dashboard />} />
             <Route path="/webrtc" element={<VideoStream />} />
           </Routes>

@@ -6,7 +6,7 @@ const VideoStream = () => {
 
   useEffect(() => {
     // Инициализация WebSocket
-    wsRef.current = new WebSocket("ws://127.0.0.1:8000/ws");
+    wsRef.current = new WebSocket("ws://80.87.104.152:8000/ws");
 
     wsRef.current.onopen = () => {
       console.log("WebSocket подключен.");

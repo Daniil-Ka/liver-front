@@ -32,7 +32,6 @@ const Container = styled(Stack)(({ theme }) => ({
 export default function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
-  const cameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -56,7 +55,7 @@ const startCamera = async () => {
   setErrorMessage(null);
 
   // Инициализация WebSocket
-  wsRef.current = new WebSocket("ws://127.0.0.1:8000/ws");
+  wsRef.current = new WebSocket("ws://80.87.104.152:8000/ws");
 
   wsRef.current.onopen = () => {
     console.log("WebSocket подключен.");
@@ -210,25 +209,6 @@ const startCamera = async () => {
     });
 };
 
-
-  // Сделать фото
-  const capturePhoto = () => {
-    if (canvasRef.current && videoRef.current) {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageUrl = canvas.toDataURL("image/png");
-        setCapturedImageUrl(imageUrl);
-      }
-    }
-  };
-
   // Отправка файла на сервер
   const uploadFile = async (file: File) => {
     try {
@@ -271,17 +251,40 @@ const startCamera = async () => {
 
   // Отправка сделанного фото
   const uploadCapturedPhoto = async () => {
-    if (!capturedImageUrl) {
+    if (!image) {
       setErrorMessage("Сначала сделайте фото.");
       return;
     }
 
-    try {
-      const blob = await (await fetch(capturedImageUrl)).blob();
-      const formData = new FormData();
-      formData.append("file", blob, "photo.png");
+    // Для изображения
+    const imageToBlob = (image: HTMLImageElement): Promise<Blob> => {
+      return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          canvas.width = image.width;
+          canvas.height = image.height;
+          ctx.drawImage(image, 0, 0);
+          canvas.toBlob(resolve, 'image/png');
+        }
+      });
+    };
 
-      const response = await axios.post("/api/upload/", formData, {
+    // Для маски
+    const maskToBlob = (mask: number[][]): Blob => {
+      const maskJson = JSON.stringify(mask);
+      return new Blob([maskJson], { type: 'application/json' });
+    };
+
+    try {
+      const imageBlob = await imageToBlob(image);
+      const maskBlob = maskToBlob(mask);
+
+      const formData = new FormData();
+      formData.append("file", imageBlob, "photo.png");
+      formData.append("mask", maskBlob, "mask.json");
+
+      const response = await axios.post("/edited-images/", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -289,11 +292,6 @@ const startCamera = async () => {
       });
 
       console.log("Фото успешно отправлено");
-
-      // Создаем URL для изображения
-      const imageUrl = URL.createObjectURL(response.data);
-      setServerImageUrl(imageUrl);
-      setErrorMessage(null);
     } catch (error) {
       console.error("Ошибка при отправке фото:", error);
       setErrorMessage("Не удалось отправить фото. Попробуйте снова.");
@@ -668,11 +666,8 @@ const startCamera = async () => {
         <Button variant="contained" onClick={startCamera}>
           Включить камеру
         </Button>
-        <Button variant="contained" onClick={capturePhoto} disabled={!isCameraActive}>
-          Сделать фото
-        </Button>
-        <Button variant="contained" onClick={uploadCapturedPhoto} disabled={!capturedImageUrl}>
-          Отправить фото
+        <Button variant="contained" onClick={uploadCapturedPhoto} disabled={!image}>
+          Отправить фото с изменённым контуром
         </Button>
       </Stack>
 
